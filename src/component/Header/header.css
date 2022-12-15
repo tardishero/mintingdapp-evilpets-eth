@@ -1,0 +1,9 @@
+#header {
+  backdrop-filter: blur(5px) !important;
+}
+
+.connect_btn {
+  width: 200px !important;
+  height: 50px !important;
+}
+                         
