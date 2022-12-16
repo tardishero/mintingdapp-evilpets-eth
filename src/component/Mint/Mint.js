@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Countdown from "react-countdown";
 
 import Button from "../common/button";
@@ -9,15 +9,24 @@ import MintStyleWrapper from "./Mint.style";
 import checkIcon from "../../assets/images/icon/mint-right-text-icon.svg";
 import discordIcon from "../../assets/images/icon/dis_logo.svg";
 import twitterIcon from "../../assets/images/icon/Twitter.svg";
+import { GooSpinner } from "react-spinners-kit";
 
 import config from "../../config/config";
 import ROYALPETSABI from "../../assets/abis/royalPetsABI.json";
 import CARETOKENABI from "../../assets/abis/careTokenABI.json";
-
+import { useWeb3React } from "@web3-react/core";
+import { useAlert } from "react-alert";
 const ethers = require("ethers");
 
-const Mint = (account, connect, disconnect) => {
+const Mint = () => {
+  const { account } = useWeb3React();
+  const alert = useAlert();
+
   const [whiteListState, setWhiteListState] = useState(true);
+  const [loadingState, setLoadingState] = useState(false);
+  const [mintCount, setMintCount] = useState(0);
+  const [mintState, setMintState] = useState(true);
+
   const provider = new ethers.providers.Web3Provider(window.ethereum);
   const Signer = provider.getSigner();
 
@@ -33,46 +42,81 @@ const Mint = (account, connect, disconnect) => {
     Signer
   );
 
+  const mintStateFunc = async () => {
+    let balance = 0;
+    if (account !== undefined) {
+      balance = await royalPetsContract.totalSupply();
+      const count = Number(balance.toString());
+      setMintCount(count);
+      if (count >= config.MaxMintCount) {
+        setMintState(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (account) {
+      mintStateFunc();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account]);
+
   const mint = async () => {
-    console.log("=>", whiteListState);
+    setLoadingState(true);
     if (whiteListState) {
       await careTokenContrat
-        .approve(config.RoyalPetsContractAddr, config.BurnCareAmout, {
-          gasLimit: 3000000,
-        })
+        .approve(
+          config.RoyalPetsContractAddr,
+          ethers.utils.parseEther(config.BurnCareAmout.toString()),
+          {
+            gasLimit: 300000,
+          }
+        )
         .then((tx) => {
           tx.wait().then(() => {
             royalPetsContract
-              .mintWhiteList(config.mintCount, config.mintCost, {
-                gasLimit: 3000000,
+              .mintWhiteList(config.mintCount, {
+                gasLimit: config.totalGas,
                 value: ethers.utils.parseEther(config.mintCost.toString()),
               })
               .then((tx) => {
-                tx.wait().then(() => {});
+                tx.wait().then(() => {
+                  setLoadingState(false);
+                  alert.success("Minted Successful", { timeout: 3000 });
+                  window.location.reload();
+                });
               });
           });
         });
     } else {
       await careTokenContrat
-        .approve(config.RoyalPetsContractAddr, config.BurnCareAmout, {
-          gasLimit: 3000000,
-        })
+        .approve(
+          config.RoyalPetsContractAddr,
+          ethers.utils.parseEther(config.BurnCareAmout.toString()),
+          {
+            gasLimit: 300000,
+          }
+        )
         .then((tx) => {
           tx.wait().then(() => {
             royalPetsContract
-              .mint(config.mintCount, config.mintCost, {
-                gasLimit: 3000000,
+              .mint(config.mintCost, {
+                gasLimit: config.totalGas,
                 value: ethers.utils.parseEther(config.mintCost.toString()),
               })
               .then((tx) => {
-                tx.wait().then(() => {});
+                tx.wait().then(() => {
+                  setLoadingState(false);
+                  alert.success("Minted Successful", { timeout: 3000 });
+                  window.location.reload();
+                });
               });
           });
         });
     }
   };
 
-  const renderer = ({ hours, minutes, seconds, completed }) => {
+  const renderer = ({ days, hours, minutes, seconds, completed }) => {
     if (completed) {
       // Render a completed state
       return (
@@ -82,26 +126,11 @@ const Mint = (account, connect, disconnect) => {
       // Render a countdown
       return (
         <h1 className="font-bold mt-3 text-4xl text-white">
-          {hours}h : {minutes}m : {seconds}s
+          {days}d : {hours}h : {minutes}m : {seconds}s
         </h1>
       );
     }
   };
-
-  // const counterSettings = {
-  //   count: 3600 * 24,
-  //   showTitle: true,
-  //   size: 40,
-  //   labelSize: 34,
-  //   backgroundColor: "transparent",
-  //   color: "#fff",
-  //   fontWeight: 700,
-  //   dayTitle: "D",
-  //   hourTitle: "H",
-  //   minuteTitle: "M",
-  //   secondTitle: "S",
-  //   id: "countdownwrap",
-  // };
 
   return (
     <MintStyleWrapper>
@@ -112,62 +141,93 @@ const Mint = (account, connect, disconnect) => {
               <div className="mint_slider">
                 <SliderNFT />
               </div>
-              <ul className="mint_count_list">
+              <ul className="mint_count_list z-50">
                 <li>
                   <h3 className="font-extrabold text-white">Remaining</h3>
-                  <h3 className="font-extrabold text-white">0 / 300</h3>
+                  <h3 className="font-extrabold text-white">
+                    {mintCount} / {config.MaxMintCount}
+                  </h3>
                 </li>
                 <li>
                   <h3 className="font-extrabold text-white">Price</h3>
                   <h3 className="font-extrabold text-white">1250 SGB</h3>
                 </li>
               </ul>
-              <Button lg variant="mint" onClick={() => mint()}>
-                {" "}
-                Mint now
-              </Button>
+              {mintState && (
+                <Button lg onClick={() => mint()} variant="outline">
+                  {" "}
+                  Mint now
+                  {loadingState && (
+                    <span className="mx-3">
+                      <GooSpinner size={27} />
+                    </span>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
           <div className="mint_right_content">
-            <div className="content_header">
-              {!whiteListState && (
-                <h4 className="flex font-extrabold">
-                  WHITELIST : SOLDOUT
-                  <span className="">
-                    <img src={checkIcon} alt="icon" />
-                  </span>
-                </h4>
-              )}
+            {mintState ? (
+              <>
+                <div className="content_header">
+                  {!whiteListState && (
+                    <h4 className="flex font-extrabold">
+                      WHITELIST : SOLDOUT
+                      <span className="">
+                        <img src={checkIcon} alt="icon" />
+                      </span>
+                    </h4>
+                  )}
 
-              <h1 className="font-bold">
-                {whiteListState ? "WhiteList" : "Public"} MINT LIVE
+                  <h1 className="font-bold">
+                    {whiteListState ? "WhiteList" : "Public"} MINT LIVE
+                  </h1>
+                </div>
+                {whiteListState && (
+                  <div className="mint_timer">
+                    <h3 className="font-extrabold text-lg text-white">
+                      Whitelist Mint End in
+                    </h3>
+                    <Countdown
+                      date={"2022-12-22 09:00:00"}
+                      intervalDelay={0}
+                      precision={3}
+                      onComplete={() => setWhiteListState(false)}
+                      renderer={renderer}
+                    />
+                  </div>
+                )}
+                <div className="content_footer">
+                  <h1 className="font-bold">Price 1250 SGB</h1>
+                </div>
+              </>
+            ) : (
+              <h1 className="flex font-bold tex text-5xl">
+                MINT END{" "}
+                <span className="">
+                  <img src={checkIcon} alt="icon" />
+                </span>
               </h1>
-            </div>
-            {whiteListState && (
-              <div className="mint_timer">
-                <h3 className="font-extrabold text-lg text-white">
-                  Whitelist Mint End in
-                </h3>
-                <Countdown
-                  date={Date.now() + 1000 * 600}
-                  intervalDelay={0}
-                  precision={3}
-                  onComplete={() => setWhiteListState(false)}
-                  renderer={renderer}
-                />
-              </div>
             )}
-            <div className="content_footer">
-              <h5 className="font-bold">Price 1250 SGB</h5>
-            </div>
+
             <div className="flex gap-3 mt-3">
               <Button lg variant="outline">
                 <img src={discordIcon} alt="icon" />
-                join discord
+                <a
+                  href="https://discord.gg/gUYSw7ZB7R"
+                  target="_blank"
+                  rel="noreferrer">
+                  join discord
+                </a>
               </Button>
               <Button lg variant="outline">
                 <img src={twitterIcon} alt="icon" />
-                join twitter
+                <a
+                  href="https://twitter.com/SpaceCatsSGB"
+                  target="_blank"
+                  rel="noreferrer">
+                  join twitter
+                </a>
               </Button>
             </div>
           </div>
